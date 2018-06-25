@@ -280,6 +280,13 @@
          {"name":"location",        "type":"uint16"}
       ]
     },{
+      "name": "producer_info2",
+      "base": "producer_info",
+      "fields": [
+         {"name":"votepay_share",      "type":"float64"},
+         {"name":"last_votedfor_time", "type":"uint64"}
+      ]
+    },{
       "name": "regproducer",
       "base": "",
       "fields": [
@@ -533,6 +540,12 @@
    "tables": [{
       "name": "producers",
       "type": "producer_info",
+      "index_type": "i64",
+      "key_names" : ["owner"],
+      "key_types" : ["uint64"]
+    },{
+      "name": "prodtable",
+      "type": "producer_info2",
       "index_type": "i64",
       "key_names" : ["owner"],
       "key_types" : ["uint64"]

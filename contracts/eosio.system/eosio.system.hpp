@@ -98,6 +98,21 @@ namespace eosiosystem {
       indexed_by<N(prototalvote), const_mem_fun<producer_info, double, &producer_info::by_votes>  >
                                >  producers_table;
 
+   struct producer_info2 : producer_info {
+      double    votepay_share = 0;
+      uint64_t  last_votedfor_time = 0;
+     
+      uint64_t primary_key()const { return owner;                                   }
+      double   by_votes()const    { return is_active ? -total_votes : total_votes;  }
+
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE_DERIVED( producer_info2, producer_info, (votepay_share)(last_votedfor_time) )
+   };
+
+   typedef eosio::multi_index< N(prodtable), producer_info2,
+                               indexed_by<N(prototalvote), const_mem_fun<producer_info2, double, &producer_info2::by_votes>  >
+                               >  producers_table2;
+
    struct voter_info {
       account_name                owner = 0; /// the voter
       account_name                proxy = 0; /// the proxy set by the voter, if any
@@ -138,6 +153,7 @@ namespace eosiosystem {
       private:
          voters_table           _voters;
          producers_table        _producers;
+         producers_table2       _producers2;
          global_state_singleton _global;
 
          eosio_global_state     _gstate;

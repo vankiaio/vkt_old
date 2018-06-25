@@ -17,7 +17,8 @@ namespace eosiosystem {
     _rammarket(_self,_self)
    {
       //print( "construct system\n" );
-      _gstate = _global.exists() ? _global.get() : get_default_parameters();
+      global_state_singleton_d global_d(_self, _self);
+      _gstate = _global.exists() ? _global.get() : ( global_d.exists() ? global_d.get() : get_default_parameters() );
 
       auto itr = _rammarket.find(S(4,RAMCORE));
 
@@ -43,7 +44,6 @@ namespace eosiosystem {
       get_blockchain_parameters(dp);
       return dp;
    }
-
 
    system_contract::~system_contract() {
       //print( "destruct system\n" );

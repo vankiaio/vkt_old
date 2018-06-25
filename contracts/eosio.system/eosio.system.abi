@@ -243,7 +243,7 @@
 
       ]
     },{
-      "name": "eosio_global_state",
+      "name": "eosio_global_state_d",
       "base": "blockchain_parameters",
       "fields": [
          {"name":"max_ram_size",                  "type":"uint64"},
@@ -259,6 +259,12 @@
          {"name":"last_producer_schedule_size",   "type":"uint16"},
          {"name":"total_producer_vote_weight",    "type":"float64"},
          {"name":"last_name_close",               "type":"block_timestamp_type"}
+      ]
+    },{
+      "name": "eosio_global_state",
+      "base": "eosio_global_state_d",
+      "fields": [
+         {"name":"total_producer_votepay_share",  "type":"float64"}
       ]
     },{
       "name": "producer_info",
@@ -319,7 +325,8 @@
         {"name":"staked",               "type":"int64"},
         {"name":"last_vote_weight",     "type":"float64"},
         {"name":"proxied_vote_weight",  "type":"float64"},
-        {"name":"is_proxy",             "type":"bool"}
+        {"name":"is_proxy",             "type":"bool"},
+        {"name":"last_vote_time",       "type":"time_point_sec"}
       ]
     },{
       "name": "claimrewards",
@@ -531,6 +538,12 @@
       "key_types" : ["uint64"]
     },{
       "name": "global",
+      "type": "eosio_global_state_d",
+      "index_type": "i64",
+      "key_names" : [],
+      "key_types" : []
+    },{
+      "name": "globalstate",
       "type": "eosio_global_state",
       "index_type": "i64",
       "key_names" : [],

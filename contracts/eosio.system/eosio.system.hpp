@@ -35,7 +35,7 @@ namespace eosiosystem {
                                >  name_bid_table;
 
 
-   struct eosio_global_state : eosio::blockchain_parameters {
+   struct eosio_global_state_d : eosio::blockchain_parameters {
       uint64_t free_ram()const { return max_ram_size - total_ram_bytes_reserved; }
 
       uint64_t             max_ram_size = 64ll*1024 * 1024 * 1024;
@@ -54,12 +54,25 @@ namespace eosiosystem {
       block_timestamp      last_name_close;
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE_DERIVED( eosio_global_state, eosio::blockchain_parameters,
+      EOSLIB_SERIALIZE_DERIVED( eosio_global_state_d, eosio::blockchain_parameters,
                                 (max_ram_size)(total_ram_bytes_reserved)(total_ram_stake)
                                 (last_producer_schedule_update)(last_pervote_bucket_fill)
                                 (pervote_bucket)(perblock_bucket)(total_unpaid_blocks)(total_activated_stake)(thresh_activated_stake_time)
                                 (last_producer_schedule_size)(total_producer_vote_weight)(last_name_close) )
    };
+
+   typedef eosio::singleton<N(global), eosio_global_state_d> global_state_singleton_d;
+
+   struct eosio_global_state : eosio_global_state_d {
+      double               total_producer_votepay_share = 0;
+
+      void operator= ( const eosio_global_state_d &b ) { eosio_global_state_d::operator=( b ); }
+         
+      // explicit serialization macro is not necessary, used here only to improve compilation time
+      EOSLIB_SERIALIZE_DERIVED( eosio_global_state, eosio_global_state_d, (total_producer_votepay_share) )
+   };
+
+   typedef eosio::singleton<N(globalstate), eosio_global_state> global_state_singleton;
 
    struct producer_info {
       account_name          owner;
@@ -81,6 +94,10 @@ namespace eosiosystem {
                         (unpaid_blocks)(last_claim_time)(location) )
    };
 
+   typedef eosio::multi_index< N(producers), producer_info,
+      indexed_by<N(prototalvote), const_mem_fun<producer_info, double, &producer_info::by_votes>  >
+                               >  producers_table;
+
    struct voter_info {
       account_name                owner = 0; /// the voter
       account_name                proxy = 0; /// the proxy set by the voter, if any
@@ -101,27 +118,19 @@ namespace eosiosystem {
       double                      proxied_vote_weight= 0; /// the total vote weight delegated to this voter as a proxy
       bool                        is_proxy = 0; /// whether the voter is a proxy for others
 
-
       uint32_t                    reserved1 = 0;
-      time                        reserved2 = 0;
-      eosio::asset                reserved3;
+      time                        last_vote_time = 0;
+      eosio::asset                reserved2;
 
       uint64_t primary_key()const { return owner; }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)(reserved1)(reserved2)(reserved3) )
+      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)
+                        (reserved1)(last_vote_time)(reserved2) )
    };
 
    typedef eosio::multi_index< N(voters), voter_info>  voters_table;
 
-
-   typedef eosio::multi_index< N(producers), producer_info,
-                               indexed_by<N(prototalvote), const_mem_fun<producer_info, double, &producer_info::by_votes>  >
-                               >  producers_table;
-
-   typedef eosio::singleton<N(global), eosio_global_state> global_state_singleton;
-
-   //   static constexpr uint32_t     max_inflation_rate = 5;  // 5% annual inflation
    static constexpr uint32_t     seconds_per_day = 24 * 3600;
    static constexpr uint64_t     system_token_symbol = CORE_SYMBOL;
 

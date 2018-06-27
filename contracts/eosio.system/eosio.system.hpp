@@ -74,7 +74,7 @@ namespace eosiosystem {
 
    typedef eosio::singleton<N(globalstate), eosio_global_state> global_state_singleton;
 
-   struct producer_info {
+   struct producer_info_d {
       account_name          owner;
       double                total_votes = 0;
       eosio::public_key     producer_key; /// a packed public key object
@@ -90,28 +90,30 @@ namespace eosiosystem {
       void     deactivate()       { producer_key = public_key(); is_active = false; }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( producer_info, (owner)(total_votes)(producer_key)(is_active)(url)
+      EOSLIB_SERIALIZE( producer_info_d, (owner)(total_votes)(producer_key)(is_active)(url)
                         (unpaid_blocks)(last_claim_time)(location) )
    };
 
-   typedef eosio::multi_index< N(producers), producer_info,
-      indexed_by<N(prototalvote), const_mem_fun<producer_info, double, &producer_info::by_votes>  >
-                               >  producers_table;
+   typedef eosio::multi_index< N(producers), producer_info_d,
+                               indexed_by<N(prototalvote), const_mem_fun<producer_info_d, double, &producer_info_d::by_votes>  >
+                               >  producers_table_d;
 
-   struct producer_info2 : producer_info {
+   struct producer_info : producer_info_d {
       double    votepay_share = 0;
       uint64_t  last_votedfor_time = 0;
      
       uint64_t primary_key()const { return owner;                                   }
       double   by_votes()const    { return is_active ? -total_votes : total_votes;  }
 
+      void operator= ( const producer_info_d &b ) { producer_info_d::operator=( b ); }
+
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE_DERIVED( producer_info2, producer_info, (votepay_share)(last_votedfor_time) )
+      EOSLIB_SERIALIZE_DERIVED( producer_info, producer_info_d, (votepay_share)(last_votedfor_time) )
    };
 
-   typedef eosio::multi_index< N(prodtable), producer_info2,
-                               indexed_by<N(prototalvote), const_mem_fun<producer_info2, double, &producer_info2::by_votes>  >
-                               >  producers_table2;
+   typedef eosio::multi_index< N(prodtable), producer_info,
+                               indexed_by<N(prototalvote), const_mem_fun<producer_info, double, &producer_info::by_votes>  >
+                               >  producers_table;
 
    struct voter_info {
       account_name                owner = 0; /// the voter
@@ -152,8 +154,8 @@ namespace eosiosystem {
    class system_contract : public native {
       private:
          voters_table           _voters;
+         producers_table_d      _producers_d;
          producers_table        _producers;
-         producers_table2       _producers2;
          global_state_singleton _global;
 
          eosio_global_state     _gstate;

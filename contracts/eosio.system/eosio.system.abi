@@ -267,7 +267,7 @@
          {"name":"total_producer_votepay_share",  "type":"float64"}
       ]
     },{
-      "name": "producer_info",
+      "name": "producer_info_d",
       "base": "",
       "fields": [
          {"name":"owner",           "type":"account_name"},
@@ -280,8 +280,8 @@
          {"name":"location",        "type":"uint16"}
       ]
     },{
-      "name": "producer_info2",
-      "base": "producer_info",
+      "name": "producer_info",
+      "base": "producer_info_d",
       "fields": [
          {"name":"votepay_share",      "type":"float64"},
          {"name":"last_votedfor_time", "type":"uint64"}
@@ -539,13 +539,13 @@
     }],
    "tables": [{
       "name": "producers",
-      "type": "producer_info",
+      "type": "producer_info_d",
       "index_type": "i64",
       "key_names" : ["owner"],
       "key_types" : ["uint64"]
     },{
       "name": "prodtable",
-      "type": "producer_info2",
+      "type": "producer_info",
       "index_type": "i64",
       "key_names" : ["owner"],
       "key_types" : ["uint64"]

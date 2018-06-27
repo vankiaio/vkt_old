@@ -12,8 +12,8 @@ namespace eosiosystem {
    system_contract::system_contract( account_name s )
    :native(s),
     _voters(_self,_self),
+    _producers_d(_self,_self),
     _producers(_self,_self),
-    _producers2(_self,_self),
     _global(_self,_self),
     _rammarket(_self,_self)
    {

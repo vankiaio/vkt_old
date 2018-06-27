@@ -49,13 +49,21 @@ namespace eosiosystem {
                info.location     = location;
             });
       } else {
+         auto prod_d = _producers_d.find( producer );
+         producer_info init_info;
+         if ( prod_d != _producers_d.end() ) {
+            init_info = *prod_d;
+            _producers_d.erase( prod_d );
+         }
          _producers.emplace( producer, [&]( producer_info& info ){
-               info.owner         = producer;
-               info.total_votes   = 0;
-               info.producer_key  = producer_key;
-               info.is_active     = true;
-               info.url           = url;
-               info.location      = location;
+               info.owner           = producer;
+               info.total_votes     = init_info.total_votes;
+               info.producer_key    = producer_key;
+               info.is_active       = true;
+               info.url             = url;
+               info.location        = location;
+               info.unpaid_blocks   = init_info.unpaid_blocks;
+               info.last_claim_time = init_info.last_claim_time;
          });
       }
    }
@@ -63,25 +71,56 @@ namespace eosiosystem {
    void system_contract::unregprod( const account_name producer ) {
       require_auth( producer );
 
-      const auto& prod = _producers.get( producer, "producer not found" );
-
-      _producers.modify( prod, 0, [&]( producer_info& info ){
-            info.deactivate();
-      });
+      auto prod_itr = _producers.find( producer );
+      if ( prod_itr != _producers.end() ) {
+         _producers.modify( prod_itr, 0, [&]( producer_info& info ){
+               info.deactivate();
+            });
+      } else {
+         auto prod_itr_d = _producers_d.find( producer );
+         eosio_assert( prod_itr_d != _producers_d.end(), "producer not found" );
+         _producers.emplace( producer, [&]( producer_info& info ){
+               info = *prod_itr_d;
+               info.deactivate();
+            });
+         _producers_d.erase( prod_itr_d );
+      }
    }
 
    void system_contract::update_elected_producers( block_timestamp block_time ) {
       _gstate.last_producer_schedule_update = block_time;
 
-      auto idx = _producers.get_index<N(prototalvote)>();
+      auto idx   = _producers.get_index<N(prototalvote)>();
+      auto idx_d = _producers_d.get_index<N(prototalvote)>();
 
       std::vector< std::pair<eosio::producer_key,uint16_t> > top_producers;
       top_producers.reserve(21);
 
-      for ( auto it = idx.cbegin(); it != idx.cend() && top_producers.size() < 21 && 0 < it->total_votes && it->active(); ++it ) {
-         top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+      {
+         auto it = idx.cbegin();
+         auto it_d = idx_d.cbegin();
+         for ( ; top_producers.size() < 21; ) {
+            if ( it != idx.end() && it_d != idx_d.cend() && it->active() && it_d->active() ) {
+               if ( 0 < it->total_votes && it->total_votes > it_d->total_votes ) {
+                  top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+                  ++it;
+               } else if ( 0 < it_d->total_votes ) {
+                  top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it_d->owner, it_d->producer_key}, it_d->location}) );
+                  ++it_d;
+               } else {
+                  break;
+               }
+            } else if ( (it_d == idx_d.cend() || !it_d->active()) && it != idx.cend() && it->active() && it->total_votes > 0 ) {
+               top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it->owner, it->producer_key}, it->location}) );
+               ++it;
+            } else if ( (it == idx.cend() || !it->active()) && it_d != idx_d.cend() && it_d->active() && it_d->total_votes > 0 ) {
+               top_producers.emplace_back( std::pair<eosio::producer_key,uint16_t>({{it_d->owner, it_d->producer_key}, it_d->location}) );
+               ++it_d;
+            } else {
+               break;
+            }
+         }
       }
-
       if ( top_producers.size() < _gstate.last_producer_schedule_size ) {
          return;
       }

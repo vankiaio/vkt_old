@@ -40,6 +40,14 @@ namespace eosiosystem {
          _producers.modify( prod, 0, [&](auto& p ) {
                p.unpaid_blocks++;
          });
+      } else {
+         auto prod_d = _producers_d.find(producer);
+         if ( prod_d != _producers_d.end() ) {
+            _gstate.total_unpaid_blocks++;
+            _producers_d.modify( prod_d, 0, [&](auto& p ) {
+                  p.unpaid_blocks++;
+               });
+         }
       }
 
       /// only update block producers once every minute, block_timestamp is in half seconds
@@ -68,7 +76,17 @@ namespace eosiosystem {
    void system_contract::claimrewards( const account_name& owner ) {
       require_auth(owner);
 
-      const auto& prod = _producers.get( owner );
+      auto prod_itr = _producers.find( owner );
+      if( prod_itr == _producers.end() ) {
+         auto prod_d_itr = _producers_d.find( owner );
+         eosio_assert( prod_d_itr != _producers_d.end(), "producer not found" );
+         _producers.emplace( owner, [&]( producer_info& info ){
+               info = *prod_d_itr;
+            });
+         _producers_d.erase( prod_d_itr );
+      }
+
+      const auto& prod = _producers.get( owner, "producer not found" );
       eosio_assert( prod.active(), "producer does not have an active key" );
 
       eosio_assert( _gstate.total_activated_stake >= min_activated_stake,

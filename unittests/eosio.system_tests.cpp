@@ -1231,7 +1231,7 @@ BOOST_FIXTURE_TEST_CASE(producer_pay, eosio_system_tester, * boost::unit_test::t
 
    // defproducerb tries to claim rewards but he's not on the list
    {
-      BOOST_REQUIRE_EQUAL(wasm_assert_msg("unable to find key"),
+      BOOST_REQUIRE_EQUAL(wasm_assert_msg("producer not found"),
                           push_action(N(defproducerb), N(claimrewards), mvo()("owner", "defproducerb")));
    }
 

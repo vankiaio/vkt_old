@@ -89,10 +89,17 @@ namespace eosiosystem {
    void system_contract::rmvproducer( account_name producer ) {
       require_auth( _self );
       auto prod = _producers.find( producer );
-      eosio_assert( prod != _producers.end(), "producer not found" );
+      if ( prod != _producers.end() ) {
       _producers.modify( prod, 0, [&](auto& p) {
             p.deactivate();
          });
+      } else {
+         auto prod_d = _producers_d.find( producer );
+         eosio_assert( prod_d != _producers_d.end(), "producer not found" );
+         _producers_d.modify( prod_d, 0, [&](auto& p) {
+               p.deactivate();
+            });
+      }
    }
 
    void system_contract::bidname( account_name bidder, account_name newname, asset bid ) {

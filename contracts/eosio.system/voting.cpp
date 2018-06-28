@@ -252,7 +252,19 @@ namespace eosiosystem {
                //eosio_assert( p.total_votes >= 0, "something bad happened" );
             });
          } else {
-            eosio_assert( !pd.second.second /* not from new set */, "producer is not registered" ); //data corruption
+            auto pitr_d = _producers_d.find( pd.first );
+            if ( pitr_d != _producers_d.end() ) {
+               eosio_assert( !voting || pitr_d->active() || !pd.second.second /* not from new set */, "producer is not currently registered" );
+               _producers_d.modify( pitr_d, 0, [&]( auto& p ) {
+                     p.total_votes += pd.second.first;
+                     if ( p.total_votes < 0 ) { // floating point arithmetics can give small negative numbers
+                        p.total_votes = 0;
+                     }
+                     _gstate.total_producer_vote_weight += pd.second.first;
+                  });
+            } else {
+               eosio_assert( !pd.second.second /* not from new set */, "producer is not registered" ); //data corruption
+            }
          }
       }
 
@@ -311,11 +323,20 @@ namespace eosiosystem {
          } else {
             auto delta = new_weight - voter.last_vote_weight;
             for ( auto acnt : voter.producers ) {
-               auto& pitr = _producers.get( acnt, "producer not found" ); //data corruption
-               _producers.modify( pitr, 0, [&]( auto& p ) {
-                     p.total_votes += delta;
-                     _gstate.total_producer_vote_weight += delta;
-               });
+               auto pitr = _producers.find( acnt );
+               if ( pitr != _producers.end() ) {
+                  _producers.modify( pitr, 0, [&]( auto& p ) {
+                        p.total_votes += delta;
+                        _gstate.total_producer_vote_weight += delta;
+                     });
+               } else {
+                  auto pitr_d = _producers_d.find( acnt );
+                  eosio_assert( pitr_d != _producers_d.end(), "producer not found" );
+                  _producers_d.modify( pitr_d, 0, [&]( auto& p ) {
+                        p.total_votes += delta;
+                        _gstate.total_producer_vote_weight += delta;
+                     });
+               }
             }
          }
       }

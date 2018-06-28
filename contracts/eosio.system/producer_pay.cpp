@@ -139,10 +139,16 @@ namespace eosiosystem {
       _gstate.pervote_bucket      -= producer_per_vote_pay;
       _gstate.perblock_bucket     -= producer_per_block_pay;
       _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
-
+      
       _producers.modify( prod, 0, [&](auto& p) {
-          p.last_claim_time = ct;
-          p.unpaid_blocks = 0;
+          p.last_claim_time    = ct;
+          p.unpaid_blocks      = 0;
+          p.last_votedfor_time = ct;
+          _gstate.total_producer_votepay_share -= p.votepay_share;
+          if ( _gstate.total_producer_votepay_share < 0 ) {
+             _gstate.total_producer_votepay_share = 0;
+          }
+          p.votepay_share      = 0;
       });
 
       if( producer_per_block_pay > 0 ) {

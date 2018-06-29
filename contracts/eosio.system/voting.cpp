@@ -64,6 +64,7 @@ namespace eosiosystem {
                info.location        = location;
                info.unpaid_blocks   = init_info.unpaid_blocks;
                info.last_claim_time = init_info.last_claim_time;
+               // initialize info.last_votepay_share_update
          });
       }
    }
@@ -244,7 +245,7 @@ namespace eosiosystem {
          if( pitr != _producers.end() ) {
             eosio_assert( !voting || pitr->active() || !pd.second.second /* not from new set */, "producer is not currently registered" );
             _producers.modify( pitr, 0, [&]( auto& p ) {
-               double delta_votepay_share = p.total_votes * ( current_time() - p.last_votepay_share_update );
+               double delta_votepay_share = p.total_votes * ( double(current_time() - p.last_votepay_share_update) / 1000000 );
                p.votepay_share            += delta_votepay_share;
                p.last_votepay_share_update = current_time();
                p.total_votes              += pd.second.first;
@@ -329,7 +330,7 @@ namespace eosiosystem {
                auto pitr = _producers.find( acnt );
                if ( pitr != _producers.end() ) {
                   _producers.modify( pitr, 0, [&]( auto& p ) {
-                        double delta_votepay_share = p.total_votes * ( current_time() - p.last_votepay_share_update );
+                        double delta_votepay_share = p.total_votes * ( double(current_time() - p.last_votepay_share_update) / 1000000 );
                         p.votepay_share            += delta_votepay_share;
                         p.last_votepay_share_update = current_time();
                         p.total_votes              += delta;

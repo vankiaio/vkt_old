@@ -283,8 +283,8 @@
       "name": "producer_info",
       "base": "producer_info_d",
       "fields": [
-         {"name":"votepay_share",      "type":"float64"},
-         {"name":"last_votedfor_time", "type":"uint64"}
+         {"name":"votepay_share",             "type":"float64"},
+         {"name":"last_votepay_share_update", "type":"uint64"}
       ]
     },{
       "name": "regproducer",

@@ -244,10 +244,10 @@ namespace eosiosystem {
          if( pitr != _producers.end() ) {
             eosio_assert( !voting || pitr->active() || !pd.second.second /* not from new set */, "producer is not currently registered" );
             _producers.modify( pitr, 0, [&]( auto& p ) {
-               double delta_votepay_share = p.total_votes * ( current_time() - p.last_votedfor_time );
-               p.votepay_share     += delta_votepay_share;
-               p.last_votedfor_time = current_time();
-               p.total_votes       += pd.second.first;
+               double delta_votepay_share = p.total_votes * ( current_time() - p.last_votepay_share_update );
+               p.votepay_share            += delta_votepay_share;
+               p.last_votepay_share_update = current_time();
+               p.total_votes              += pd.second.first;
                if ( p.total_votes < 0 ) { // floating point arithmetics can give small negative numbers
                   p.total_votes = 0;
                }
@@ -329,10 +329,10 @@ namespace eosiosystem {
                auto pitr = _producers.find( acnt );
                if ( pitr != _producers.end() ) {
                   _producers.modify( pitr, 0, [&]( auto& p ) {
-                        double delta_votepay_share = p.total_votes * ( current_time() - p.last_votedfor_time );
-                        p.votepay_share     += delta_votepay_share;
-                        p.last_votedfor_time = current_time();
-                        p.total_votes       += delta;
+                        double delta_votepay_share = p.total_votes * ( current_time() - p.last_votepay_share_update );
+                        p.votepay_share            += delta_votepay_share;
+                        p.last_votepay_share_update = current_time();
+                        p.total_votes              += delta;
 
                         _gstate.total_producer_vote_weight   += delta;
                         _gstate.total_producer_votepay_share += delta_votepay_share;

@@ -100,7 +100,7 @@ namespace eosiosystem {
 
    struct producer_info : producer_info_d {
       double    votepay_share = 0;
-      uint64_t  last_votedfor_time = 0;
+      uint64_t  last_votepay_share_update = 0;
      
       uint64_t primary_key()const { return owner;                                   }
       double   by_votes()const    { return is_active ? -total_votes : total_votes;  }
@@ -108,7 +108,7 @@ namespace eosiosystem {
       void operator= ( const producer_info_d &b ) { producer_info_d::operator=( b ); }
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE_DERIVED( producer_info, producer_info_d, (votepay_share)(last_votedfor_time) )
+      EOSLIB_SERIALIZE_DERIVED( producer_info, producer_info_d, (votepay_share)(last_votepay_share_update) )
    };
 
    typedef eosio::multi_index< N(prodtable), producer_info,

@@ -141,9 +141,9 @@ namespace eosiosystem {
       _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
       
       _producers.modify( prod, 0, [&](auto& p) {
-          p.last_claim_time    = ct;
-          p.unpaid_blocks      = 0;
-          p.last_votedfor_time = ct;
+          p.last_claim_time           = ct;
+          p.unpaid_blocks             = 0;
+          p.last_votepay_share_update = ct;
           _gstate.total_producer_votepay_share -= p.votepay_share;
           if ( _gstate.total_producer_votepay_share < 0 ) {
              _gstate.total_producer_votepay_share = 0;

@@ -157,7 +157,6 @@ namespace eosiosystem {
          producers_table_d      _producers_d;
          producers_table        _producers;
          global_state_singleton _global;
-
          eosio_global_state     _gstate;
          rammarket              _rammarket;
 

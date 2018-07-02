@@ -18,8 +18,14 @@ namespace eosiosystem {
     _rammarket(_self,_self)
    {
       //print( "construct system\n" );
-      global_state_singleton_d global_d(_self, _self);
-      _gstate = _global.exists() ? _global.get() : ( global_d.exists() ? global_d.get() : get_default_parameters() );
+      global_state_singleton_d global_d( _self, _self );      
+      if ( _global.exists() ) {
+         _gstate = _global.get();
+      } else if ( global_d.exists() ) {
+         _gstate = global_d.get();
+      } else {
+         _gstate = get_default_parameters();
+      }
 
       auto itr = _rammarket.find(S(4,RAMCORE));
 

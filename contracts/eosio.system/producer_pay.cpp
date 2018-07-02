@@ -136,15 +136,15 @@ namespace eosiosystem {
 
       /// New metric to be used in pervote pay calculation. Instead of vote weight ratio, we combine vote weight and 
       /// time duration the vote weight has been held into one metric.
-      /*
       double  delta_votepay_share    = prod.total_votes * ( double(current_time() - prod.last_votepay_share_update) / 1000000 );
       double  producer_votepay_share = prod.votepay_share + delta_votepay_share;
       double  total_votepay_share    = _gstate.total_producer_votepay_share + delta_votepay_share;
+      /*
       int64_t producer_per_vote_pay  = 0;
       if( total_votepay_share > 0 ) {
-         print(producer_votepay_share, "     ", total_votepay_share);
          producer_per_vote_pay  = int64_t((producer_votepay_share * _gstate.pervote_bucket) / total_votepay_share);
-         if(producer_per_vote_pay > _gstate.pervote_bucket) producer_per_vote_pay = _gstate.pervote_bucket; 
+         if( producer_per_vote_pay > _gstate.pervote_bucket )
+            producer_per_vote_pay = _gstate.pervote_bucket; 
       }
       */
 
@@ -156,14 +156,16 @@ namespace eosiosystem {
       _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
       
       _producers.modify( prod, 0, [&](auto& p) {
-          p.last_claim_time           = ct;
-          p.unpaid_blocks             = 0;
-          p.last_votepay_share_update = ct;
-          _gstate.total_producer_votepay_share -= p.votepay_share;
-          if ( _gstate.total_producer_votepay_share < 0 ) {
-             _gstate.total_producer_votepay_share = 0;
+          p.last_claim_time = ct;
+          p.unpaid_blocks   = 0;
+          if ( producer_per_vote_pay > 0 ) {
+             p.last_votepay_share_update = ct;
+             _gstate.total_producer_votepay_share -= p.votepay_share;
+             if ( _gstate.total_producer_votepay_share < 0 ) {
+                _gstate.total_producer_votepay_share = 0;
+             }
+             p.votepay_share = 0;
           }
-          p.votepay_share      = 0;
       });
 
       if( producer_per_block_pay > 0 ) {

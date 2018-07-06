@@ -13,11 +13,14 @@ namespace eosiosystem {
    :native(s),
     _voters(_self,_self),
     _producers(_self,_self),
+    _producers2(_self,_self),
     _global(_self,_self),
+    _global2(_self,_self),
     _rammarket(_self,_self)
    {
       //print( "construct system\n" );
       _gstate = _global.exists() ? _global.get() : get_default_parameters();
+      _gstate2 = _global2.exists() ? _global2.get() : eosio_global_state2{};
 
       auto itr = _rammarket.find(S(4,RAMCORE));
 
@@ -48,7 +51,7 @@ namespace eosiosystem {
    system_contract::~system_contract() {
       //print( "destruct system\n" );
       _global.set( _gstate, _self );
-      //eosio_exit(0);
+      _global2.set( _gstate2, _self );
    }
 
    void system_contract::setram( uint64_t max_ram_size ) {

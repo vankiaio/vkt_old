@@ -1682,6 +1682,154 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(multiple_producer_votepay_share, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
+
+   auto within_one = [](int64_t a, int64_t b) -> bool { return std::abs( a - b ) <= 1; };
+
+   const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
+   const double  usecs_per_year = secs_per_year * 1000000;
+   const double  cont_rate      = 4.879/100.;
+
+   const asset net = core_from_string("80.0000");
+   const asset cpu = core_from_string("80.0000");
+   const std::vector<account_name> voters = { N(producvotera), N(producvoterb), N(producvoterc), N(producvoterd) };
+   for (const auto& v: voters) {
+      create_account_with_resources( v, config::system_account_name, core_from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, v, core_from_string("100000000.0000"), config::system_account_name );
+      BOOST_REQUIRE_EQUAL(success(), stake(v, core_from_string("30000000.0000"), core_from_string("30000000.0000")) );
+   }
+
+   // create accounts {defproducera, defproducerb, ..., defproducerz, abcproducera, ..., defproducern} and register as producers
+   std::vector<account_name> producer_names;
+   {
+      producer_names.reserve('z' - 'a' + 1);
+      {
+         const std::string root("defproducer");
+         for ( char c = 'a'; c <= 'z'; ++c ) {
+            producer_names.emplace_back(root + std::string(1, c));
+         }
+      }
+      {
+         const std::string root("abcproducer");
+         for ( char c = 'a'; c <= 'n'; ++c ) {
+            producer_names.emplace_back(root + std::string(1, c));
+         }
+      }
+      setup_producer_accounts(producer_names);
+      for (const auto& p: producer_names) {
+         BOOST_REQUIRE_EQUAL( success(), regproducer(p) );
+         produce_blocks(1);
+         ilog( "------ get pro----------" );
+         wdump((p));
+         BOOST_TEST_REQUIRE(0 == get_producer_info(p)["total_votes"].as_double());
+         BOOST_TEST_REQUIRE(0 == get_producer_info(p)["last_claim_time"].as_uint64());
+         BOOST_TEST_REQUIRE(0 == get_producer_info2(p)["votepay_share"].as_double());
+         BOOST_TEST_REQUIRE(0 == get_producer_info2(p)["last_votepay_share_update"].as_uint64());
+      }
+   }
+
+   // producvotera votes for defproducera ... defproducerj
+   // producvoterb votes for defproducera ... defproduceru
+   // producvoterc votes for defproducera ... defproducerz
+   // producvoterd votes for abcproducera ... abcproducern
+   {
+      BOOST_REQUIRE_EQUAL( success(), vote(N(producvotera), vector<account_name>(producer_names.begin(), producer_names.begin()+10)) );
+      produce_block( fc::hours(10) );
+      BOOST_TEST_REQUIRE( 0 == get_global_state2()["total_producer_votepay_share"].as_double() );
+      const auto& init_info  = get_producer_info(producer_names[0]);
+      const auto& init_info2 = get_producer_info2(producer_names[0]);
+      uint64_t init_update = init_info2["last_votepay_share_update"].as_uint64();
+      double   init_votes  = init_info["total_votes"].as_double();
+      BOOST_REQUIRE_EQUAL( success(), vote(N(producvoterb), vector<account_name>(producer_names.begin(), producer_names.begin()+21)) );
+      const auto& info  = get_producer_info(producer_names[0]);
+      const auto& info2 = get_producer_info2(producer_names[0]);
+      BOOST_TEST_REQUIRE( ((info2["last_votepay_share_update"].as_uint64() - init_update)/double(1E6)) * init_votes == info2["votepay_share"].as_double() );
+      BOOST_TEST_REQUIRE( info2["votepay_share"].as_double() * 10, get_global_state2()["total_producer_votepay_share"].as_double() );
+      BOOST_TEST_REQUIRE( 0 == get_producer_info2(producer_names[11])["votepay_share"].as_double() );
+      produce_block( fc::hours(43) );
+      BOOST_REQUIRE_EQUAL( success(), vote(N(producvoterc), vector<account_name>(producer_names.begin(), producer_names.begin()+26)) );
+      BOOST_REQUIRE( 0 < get_producer_info2(producer_names[11])["votepay_share"].as_double() );
+      BOOST_REQUIRE_EQUAL( success(), vote(N(producvoterd), vector<account_name>(producer_names.begin()+26, producer_names.end())) );
+      BOOST_TEST_REQUIRE( 0 == get_producer_info2(producer_names[26])["votepay_share"].as_double() );
+   }
+
+   {
+      auto proda = get_producer_info( N(defproducera) );
+      auto prodj = get_producer_info( N(defproducerj) );
+      auto prodk = get_producer_info( N(defproducerk) );
+      auto produ = get_producer_info( N(defproduceru) );
+      auto prodv = get_producer_info( N(defproducerv) );
+      auto prodz = get_producer_info( N(defproducerz) );
+
+      BOOST_REQUIRE (0 == proda["unpaid_blocks"].as<uint32_t>() && 0 == prodz["unpaid_blocks"].as<uint32_t>());
+      BOOST_REQUIRE (0 == proda["last_claim_time"].as_uint64() && 0 == prodz["last_claim_time"].as_uint64());
+
+      // check vote ratios
+      BOOST_REQUIRE ( 0 < proda["total_votes"].as_double() && 0 < prodz["total_votes"].as_double() );
+      BOOST_TEST_REQUIRE( proda["total_votes"].as_double() == prodj["total_votes"].as_double() );
+      BOOST_TEST_REQUIRE( prodk["total_votes"].as_double() == produ["total_votes"].as_double() );
+      BOOST_TEST_REQUIRE( prodv["total_votes"].as_double() == prodz["total_votes"].as_double() );
+      BOOST_TEST_REQUIRE( 2 * proda["total_votes"].as_double() == 3 * produ["total_votes"].as_double() );
+      BOOST_TEST_REQUIRE( proda["total_votes"].as_double() ==  3 * prodz["total_votes"].as_double() );
+   }
+
+   // give a chance for everyone to produce blocks
+   {
+      produce_blocks(23 * 12 + 20);
+      bool all_21_produced = true;
+      for (uint32_t i = 0; i < 21; ++i) {
+         if (0 == get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
+            all_21_produced = false;
+         }
+      }
+      bool rest_didnt_produce = true;
+      for (uint32_t i = 21; i < producer_names.size(); ++i) {
+         if (0 < get_producer_info(producer_names[i])["unpaid_blocks"].as<uint32_t>()) {
+            rest_didnt_produce = false;
+         }
+      }
+      BOOST_REQUIRE(all_21_produced && rest_didnt_produce);
+   }
+
+   std::vector<double> vote_shares(producer_names.size());
+   {
+      double total_votes = 0;
+      for (uint32_t i = 0; i < producer_names.size(); ++i) {
+         vote_shares[i] = get_producer_info(producer_names[i])["total_votes"].as<double>();
+         total_votes += vote_shares[i];
+      }
+      BOOST_TEST(total_votes == get_global_state()["total_producer_vote_weight"].as<double>());
+      std::for_each(vote_shares.begin(), vote_shares.end(), [total_votes](double& x) { x /= total_votes; });
+
+      BOOST_TEST_REQUIRE( double(1) == std::accumulate(vote_shares.begin(), vote_shares.end(), double(0)) );
+      BOOST_TEST_REQUIRE( double(3./71.) == vote_shares.front() );
+      BOOST_TEST_REQUIRE( double(1./71.) == vote_shares.back() );
+   }
+
+   std::vector<double> votepay_shares(producer_names.size());
+   {
+      double total_votepay_shares = 0;
+      for (uint32_t i = 0; i < producer_names.size(); ++i) {
+         votepay_shares[i] = get_producer_info2(producer_names[i])["votepay_share"].as_double();
+         total_votepay_shares += votepay_shares[i];
+      }
+      BOOST_TEST_REQUIRE( get_global_state2()["total_producer_votepay_share"].as_double() == total_votepay_shares );
+   }
+
+   {
+      const uint32_t prod_index = 15;
+      const account_name prod_name = producer_names[prod_index];
+      const auto& init_info         = get_producer_info(prod_name);
+      const auto& init_info2        = get_producer_info2(prod_name);
+      BOOST_REQUIRE_EQUAL( 0, init_info["last_claim_time"].as_uint64() );
+      BOOST_REQUIRE( 0 < init_info2["votepay_share"].as_double() );
+      BOOST_REQUIRE( 0 < init_info2["last_votepay_share_update"].as_uint64() );
+
+      BOOST_REQUIRE_EQUAL(success(), push_action(prod_name, N(claimrewards), mvo()("owner", prod_name)));
+   }
+
+} FC_LOG_AND_RETHROW()                                 
+
 BOOST_FIXTURE_TEST_CASE(producers_upgrade_system_contract, eosio_system_tester) try {
    //install multisig contract
    abi_serializer msig_abi_ser = initialize_multisig();

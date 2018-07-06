@@ -78,6 +78,16 @@ namespace eosiosystem {
 
       eosio_assert( ct - prod.last_claim_time > useconds_per_day, "already claimed rewards within past day" );
 
+      if ( _producers2.find( owner ) == _producers2.end() ) {
+         _producers2.emplace( owner, [&]( producer_info2& info  ) {
+            info.owner = owner;
+            if ( prod.last_claim_time > 0 )
+               info.last_votepay_share_update = prod.last_claim_time;
+            else
+               info.last_votepay_share_update = ct;
+         });
+      }
+
       const asset token_supply   = token( N(eosio.token)).get_supply(symbol_type(system_token_symbol).name() );
       const auto usecs_since_last_fill = ct - _gstate.last_pervote_bucket_fill;
 
@@ -118,6 +128,22 @@ namespace eosiosystem {
       if( producer_per_vote_pay < min_pervote_daily_pay ) {
          producer_per_vote_pay = 0;
       }
+
+      /// New metric to be used in pervote pay calculation. Instead of vote weight ratio, we combine vote weight and 
+      /// time duration the vote weight has been held into one metric.
+      auto prod2 = _producers2.find( owner );
+      double  delta_votepay_share    = prod.total_votes * ( double(current_time() - prod2->last_votepay_share_update) / 1000000 );
+      double  producer_votepay_share = prod2->votepay_share + delta_votepay_share;
+      double  total_votepay_share    = _gstate2.total_producer_votepay_share + delta_votepay_share;
+      /*
+      int64_t producer_per_vote_pay  = 0;
+      if( total_votepay_share > 0 ) {
+         producer_per_vote_pay  = int64_t((producer_votepay_share * _gstate.pervote_bucket) / total_votepay_share);
+         if( producer_per_vote_pay > _gstate.pervote_bucket )
+            producer_per_vote_pay = _gstate.pervote_bucket; 
+      }
+      */
+
       _gstate.pervote_bucket      -= producer_per_vote_pay;
       _gstate.perblock_bucket     -= producer_per_block_pay;
       _gstate.total_unpaid_blocks -= prod.unpaid_blocks;
@@ -125,6 +151,12 @@ namespace eosiosystem {
       _producers.modify( prod, 0, [&](auto& p) {
           p.last_claim_time = ct;
           p.unpaid_blocks = 0;
+      });
+
+      _producers2.modify( prod2, 0, [&](auto& p) {
+         p.last_votepay_share_update = ct;
+         _gstate2.total_producer_votepay_share -= p.votepay_share;
+         p.votepay_share = 0;
       });
 
       if( producer_per_block_pay > 0 ) {

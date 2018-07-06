@@ -261,6 +261,12 @@
          {"name":"last_name_close",               "type":"block_timestamp_type"}
       ]
     },{
+      "name": "eosio_global_state2",
+      "base": "",
+      "fields": [
+         {"name":"total_producer_votepay_share", "type":"float64"}
+      ]
+    },{
       "name": "producer_info",
       "base": "",
       "fields": [
@@ -272,6 +278,14 @@
          {"name":"unpaid_blocks",   "type":"uint32"},
          {"name":"last_claim_time", "type":"uint64"},
          {"name":"location",        "type":"uint16"}
+      ]
+    },{
+      "name": "producer_info2",
+      "base": "",
+      "fields": [
+         {"name":"owner",                     "type":"account_name"},
+         {"name":"votepay_share",             "type":"float64"},
+         {"name":"last_votepay_share_update", "type":"uint64"}
       ]
     },{
       "name": "regproducer",
@@ -530,8 +544,20 @@
       "key_names" : ["owner"],
       "key_types" : ["uint64"]
     },{
+      "name": "producers2",
+      "type": "producer_info2",
+      "index_type": "i64",
+      "key_names" : ["owner"],
+      "key_types" : ["uint64"]
+    },{
       "name": "global",
       "type": "eosio_global_state",
+      "index_type": "i64",
+      "key_names" : [],
+      "key_types" : []
+    },{
+      "name": "global2",
+      "type": "eosio_global_state2",
       "index_type": "i64",
       "key_names" : [],
       "key_types" : []

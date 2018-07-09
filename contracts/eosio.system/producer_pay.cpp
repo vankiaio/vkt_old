@@ -132,9 +132,11 @@ namespace eosiosystem {
       /// New metric to be used in pervote pay calculation. Instead of vote weight ratio, we combine vote weight and 
       /// time duration the vote weight has been held into one metric.
       auto prod2 = _producers2.find( owner );
-      double  delta_votepay_share    = prod.total_votes * ( double(current_time() - prod2->last_votepay_share_update) / 1000000 );
-      double  producer_votepay_share = prod2->votepay_share + delta_votepay_share;
-      double  total_votepay_share    = _gstate2.total_producer_votepay_share + delta_votepay_share;
+      double delta_votepay_share    = prod.total_votes * ( double(current_time() - prod2->last_votepay_share_update) / 1000000 );
+      double producer_votepay_share = prod2->votepay_share + delta_votepay_share;
+      double total_votepay_share    = _gstate2.total_producer_votepay_share + delta_votepay_share;
+      (void)producer_votepay_share;
+      (void)total_votepay_share;
       /*
       int64_t producer_per_vote_pay  = 0;
       if( total_votepay_share > 0 ) {

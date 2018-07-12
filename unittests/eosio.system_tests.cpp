@@ -1837,7 +1837,59 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_votepay_share, eosio_system_tester, * 
       BOOST_TEST_REQUIRE( get_global_state2()["total_producer_votepay_share"].as_double() == total_votepay_shares );
    }
 
-} FC_LOG_AND_RETHROW()                                 
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(votepay_share_proxy, eosio_system_tester, * boost::unit_test::tolerance(1e-5)) try {
+
+   cross_15_percent_threshold();
+   
+   const asset net = core_from_string("80.0000");
+   const asset cpu = core_from_string("80.0000");
+   const std::vector<account_name> accounts = { N(aliceaccount), N(bobbyaccount), N(carolaccount) };
+   for (const auto& a: accounts) {
+      create_account_with_resources( a, config::system_account_name, core_from_string("1.0000"), false, net, cpu );
+      transfer( config::system_account_name, a, core_from_string("1000.0000"), config::system_account_name );
+   }
+   const auto alice = accounts[0];
+   const auto bob   = accounts[1];
+   const auto carol = accounts[2];
+
+   // alice becomes a proxy
+   BOOST_REQUIRE_EQUAL( success(), push_action( alice, N(regproxy), mvo()("proxy", alice)("isproxy", true) ) );
+   REQUIRE_MATCHING_OBJECT( proxy( alice ), get_voter_info( alice ) );
+
+   // carol becomes a producer
+   BOOST_REQUIRE_EQUAL( success(), regproducer( carol, 1) );
+
+   // bob chooses aliceaccount as a proxy
+   BOOST_REQUIRE_EQUAL( success(), stake( bob, core_from_string("100.0002"), core_from_string("50.0001") ) );
+   BOOST_REQUIRE_EQUAL( success(), stake( alice, core_from_string("150.0000"), core_from_string("150.0000") ) );
+   BOOST_REQUIRE_EQUAL( success(), vote( bob, { }, alice ) );
+   BOOST_TEST_REQUIRE( stake2votes(core_from_string("150.0003")) == get_voter_info(alice)["proxied_vote_weight"].as_double() );
+
+   BOOST_REQUIRE_EQUAL( success(), vote( alice, { carol } ) );
+   double total_votes = get_producer_info(carol)["total_votes"].as_double();
+   BOOST_TEST_REQUIRE( stake2votes(core_from_string("450.0003")) == total_votes );
+   BOOST_TEST_REQUIRE( 0 == get_producer_info2(carol)["votepay_share"].as_double() );
+   uint64_t last_update_time = get_producer_info2(carol)["last_votepay_share_update"].as_uint64();
+   produce_block( fc::hours(15) );
+   BOOST_REQUIRE_EQUAL( success(), vote( alice, { carol } ) );
+   auto cur_info2 = get_producer_info2(carol);
+   double expected_votepay_share = ( (cur_info2["last_votepay_share_update"].as_uint64() - last_update_time) / 1000000 ) * total_votes;
+   BOOST_TEST_REQUIRE( expected_votepay_share == cur_info2["votepay_share"].as_double() );
+   BOOST_TEST_REQUIRE( stake2votes(core_from_string("450.0003")) == get_producer_info(carol)["total_votes"].as_double() );
+   last_update_time = get_producer_info2(carol)["last_votepay_share_update"].as_uint64();
+   total_votes      = get_producer_info(carol)["total_votes"].as_double();
+
+   produce_block( fc::hours(40) );
+   BOOST_REQUIRE_EQUAL( success(), unstake( bob, core_from_string("10.0002"), core_from_string("10.0001") ) );
+   BOOST_TEST_REQUIRE( stake2votes(core_from_string("430.0000")), get_producer_info(carol)["total_votes"].as_double() );
+
+   cur_info2 = get_producer_info2(carol);
+   expected_votepay_share += ( (cur_info2["last_votepay_share_update"].as_uint64() - last_update_time) / 1000000 ) * total_votes;
+   BOOST_TEST_REQUIRE( expected_votepay_share == cur_info2["votepay_share"].as_double() );
+
+} FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(votepay_transition, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 

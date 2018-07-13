@@ -264,6 +264,7 @@
       "name": "eosio_global_state2",
       "base": "",
       "fields": [
+         {"name":"revision",                     "type":"uint8"},
          {"name":"total_producer_votepay_share", "type":"float64"}
       ]
     },{
@@ -353,6 +354,12 @@
       "base": "",
       "fields": [
         {"name":"producer", "type":"account_name"}
+      ]
+    },{
+      "name": "updtrevision",
+      "base": "",
+      "fields": [
+        {"name":"revision", "type":"uint8"}
       ]
     },{
       "name": "set_account_limits",
@@ -515,6 +522,10 @@
    },{
       "name": "rmvproducer",
       "type": "rmvproducer",
+      "ricardian_contract": ""
+   },{
+      "name": "updtrevision",
+      "type": "updtrevision",
       "ricardian_contract": ""
    },{
       "name": "setalimits",

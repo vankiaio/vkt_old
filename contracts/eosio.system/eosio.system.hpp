@@ -63,9 +63,10 @@ namespace eosiosystem {
 
    struct eosio_global_state2 {
       eosio_global_state2() { }
+      uint8_t              revision = 0;
       double               total_producer_votepay_share = 0;
          
-      EOSLIB_SERIALIZE( eosio_global_state2, (total_producer_votepay_share) )
+      EOSLIB_SERIALIZE( eosio_global_state2, (revision)(total_producer_votepay_share) )
    };
 
    struct producer_info {
@@ -238,6 +239,8 @@ namespace eosiosystem {
          void setpriv( account_name account, uint8_t ispriv );
 
          void rmvproducer( account_name producer );
+         
+         void updtrevision( uint8_t revision );
 
          void bidname( account_name bidder, account_name newname, asset bid );
       private:

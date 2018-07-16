@@ -40,32 +40,38 @@ namespace eosiosystem {
       require_auth( producer );
 
       auto prod = _producers.find( producer );
+      const auto ct = current_time();
 
       if ( prod != _producers.end() ) {
          _producers.modify( prod, producer, [&]( producer_info& info ){
-               info.producer_key = producer_key;
-               info.is_active    = true;
-               info.url          = url;
-               info.location     = location;
-            });
+            info.producer_key = producer_key;
+            info.is_active    = true;
+            info.url          = url;
+            info.location     = location;
+         });
 
          auto prod2 = _producers2.find( producer );
          if ( prod2 == _producers2.end() ) {
             _producers2.emplace( producer, [&]( producer_info2& info ){
-                  info.owner     = producer;
+               info.owner     = producer;
+               if( prod->last_claim_time > 0 )
+                  info.last_votepay_share_update = prod->last_claim_time;
+               else
+                  info.last_votepay_share_update = ct;
             });
          }
       } else {
          _producers.emplace( producer, [&]( producer_info& info ){
-               info.owner         = producer;
-               info.total_votes   = 0;
-               info.producer_key  = producer_key;
-               info.is_active     = true;
-               info.url           = url;
-               info.location      = location;
+            info.owner        = producer;
+            info.total_votes  = 0;
+            info.producer_key = producer_key;
+            info.is_active    = true;
+            info.url          = url;
+            info.location     = location;
+            info.last_claim_time = ct;
          });
          _producers2.emplace( producer, [&]( producer_info2& info ){
-               info.owner         = producer;
+            info.owner        = producer;
          });
       }
    }
@@ -76,13 +82,13 @@ namespace eosiosystem {
       const auto& prod = _producers.get( producer, "producer not found" );
 
       _producers.modify( prod, 0, [&]( producer_info& info ){
-            info.deactivate();
+         info.deactivate();
       });
       
       auto prod2 = _producers2.find( producer );
       if ( prod2 == _producers2.end() ) {
          _producers2.emplace( producer, [&]( producer_info2& info ){
-               info.owner = producer;
+            info.owner = producer;
          });
       }
    }
@@ -233,11 +239,13 @@ namespace eosiosystem {
             auto prod2 = _producers2.find( pd.first );
             if( prod2 != _producers2.end() ) {
                _producers2.modify( prod2, 0, [&]( auto& p ) {
-                     auto ct = current_time();
+                  auto ct = current_time();
+                  if( ct - pitr->last_claim_time < 2 * useconds_per_day ) {
                      double delta_votepay_share = init_total_votes * ( double(ct - p.last_votepay_share_update) / 1000000 );
-                     p.last_votepay_share_update = ct;
                      p.votepay_share            += delta_votepay_share;
                      _gstate2.total_producer_votepay_share += delta_votepay_share;
+                  }
+                  p.last_votepay_share_update = ct;
                });
             }
          } else {
@@ -308,11 +316,13 @@ namespace eosiosystem {
                auto prod2 = _producers2.find( acnt );
                if ( prod2 != _producers2.end() ) {
                   _producers2.modify( prod2, 0, [&]( auto& p ) {
-                        auto ct = current_time();
+                     auto ct = current_time();
+                     if( ct - pitr.last_claim_time < 2 * useconds_per_day ) {
                         double delta_votepay_share = init_total_votes * ( double(ct - p.last_votepay_share_update) / 1000000 );
-                        p.last_votepay_share_update = ct;
                         p.votepay_share            += delta_votepay_share;
                         _gstate2.total_producer_votepay_share += delta_votepay_share;
+                     }
+                     p.last_votepay_share_update = ct;
                   });
                }
             }

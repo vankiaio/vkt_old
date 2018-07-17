@@ -240,7 +240,7 @@ namespace eosiosystem {
             if( prod2 != _producers2.end() ) {
                _producers2.modify( prod2, 0, [&]( auto& p ) {
                   auto ct = current_time();
-                  if( ct - pitr->last_claim_time < 2 * useconds_per_day ) {
+                  if( ct - pitr->last_claim_time < 3 * useconds_per_day ) {
                      double delta_votepay_share = init_total_votes * ( double(ct - p.last_votepay_share_update) / 1000000 );
                      p.votepay_share            += delta_votepay_share;
                      _gstate2.total_producer_votepay_share += delta_votepay_share;
@@ -317,7 +317,7 @@ namespace eosiosystem {
                if ( prod2 != _producers2.end() ) {
                   _producers2.modify( prod2, 0, [&]( auto& p ) {
                      auto ct = current_time();
-                     if( ct - pitr.last_claim_time < 2 * useconds_per_day ) {
+                     if( ct - pitr.last_claim_time < 3 * useconds_per_day ) {
                         double delta_votepay_share = init_total_votes * ( double(ct - p.last_votepay_share_update) / 1000000 );
                         p.votepay_share            += delta_votepay_share;
                         _gstate2.total_producer_votepay_share += delta_votepay_share;

@@ -48,30 +48,29 @@ namespace eosiosystem {
             info.is_active    = true;
             info.url          = url;
             info.location     = location;
+            if ( info.last_claim_time == 0 )
+               info.last_claim_time = ct;
          });
 
          auto prod2 = _producers2.find( producer );
          if ( prod2 == _producers2.end() ) {
             _producers2.emplace( producer, [&]( producer_info2& info ){
-               info.owner     = producer;
-               if( prod->last_claim_time > 0 )
-                  info.last_votepay_share_update = prod->last_claim_time;
-               else
-                  info.last_votepay_share_update = ct;
+               info.owner                     = producer;
+               info.last_votepay_share_update = prod->last_claim_time;
             });
          }
       } else {
          _producers.emplace( producer, [&]( producer_info& info ){
-            info.owner        = producer;
-            info.total_votes  = 0;
-            info.producer_key = producer_key;
-            info.is_active    = true;
-            info.url          = url;
-            info.location     = location;
+            info.owner           = producer;
+            info.total_votes     = 0;
+            info.producer_key    = producer_key;
+            info.is_active       = true;
+            info.url             = url;
+            info.location        = location;
             info.last_claim_time = ct;
          });
          _producers2.emplace( producer, [&]( producer_info2& info ){
-            info.owner        = producer;
+            info.owner = producer;
          });
       }
    }

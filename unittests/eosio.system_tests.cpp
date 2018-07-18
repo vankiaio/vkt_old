@@ -1748,10 +1748,6 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_pay, eosio_system_tester, * boost::uni
 
 BOOST_FIXTURE_TEST_CASE(multiple_producer_votepay_share, eosio_system_tester, * boost::unit_test::tolerance(1e-10)) try {
 
-   const int64_t secs_per_year  = 52 * 7 * 24 * 3600;
-   const double  usecs_per_year = secs_per_year * 1000000;
-   const double  cont_rate      = 4.879/100.;
-
    const asset net = core_from_string("80.0000");
    const asset cpu = core_from_string("80.0000");
    const std::vector<account_name> voters = { N(producvotera), N(producvoterb), N(producvoterc), N(producvoterd) };
@@ -1784,7 +1780,6 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_votepay_share, eosio_system_tester, * 
          ilog( "------ get pro----------" );
          wdump((p));
          BOOST_TEST_REQUIRE(0 == get_producer_info(p)["total_votes"].as_double());
-         //         BOOST_TEST_REQUIRE(0 == get_producer_info(p)["last_claim_time"].as_uint64());
          BOOST_TEST_REQUIRE(0 == get_producer_info2(p)["votepay_share"].as_double());
          BOOST_TEST_REQUIRE(0 == get_producer_info2(p)["last_votepay_share_update"].as_uint64());
       }
@@ -1826,7 +1821,6 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_votepay_share, eosio_system_tester, * 
       auto prodz = get_producer_info( N(defproducerz) );
 
       BOOST_REQUIRE (0 == proda["unpaid_blocks"].as<uint32_t>() && 0 == prodz["unpaid_blocks"].as<uint32_t>());
-      //      BOOST_REQUIRE (0 == proda["last_claim_time"].as_uint64() && 0 == prodz["last_claim_time"].as_uint64());
 
       // check vote ratios
       BOOST_REQUIRE ( 0 < proda["total_votes"].as_double() && 0 < prodz["total_votes"].as_double() );
@@ -1885,7 +1879,6 @@ BOOST_FIXTURE_TEST_CASE(multiple_producer_votepay_share, eosio_system_tester, * 
       const account_name prod_name = producer_names[prod_index];
       const auto& init_info        = get_producer_info(prod_name);
       const auto& init_info2       = get_producer_info2(prod_name);
-      //      BOOST_REQUIRE_EQUAL( 0, init_info["last_claim_time"].as_uint64() );
       BOOST_REQUIRE( 0 < init_info2["votepay_share"].as_double() );
       BOOST_REQUIRE( 0 < init_info2["last_votepay_share_update"].as_uint64() );
 

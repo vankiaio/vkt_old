@@ -1552,7 +1552,7 @@ signed_block_ptr controller::fetch_block_by_id( block_id_type id )const {
 }
 
 signed_block_ptr controller::fetch_block_by_number( uint32_t block_num )const  { try {
-   auto blk_state = my->fork_db.get_block_in_current_chain_by_num( block_num );
+   auto blk_state = fetch_block_state_by_number( block_num );
    if( blk_state ) {
       return blk_state->block;
    }
@@ -1566,14 +1566,30 @@ block_state_ptr controller::fetch_block_state_by_id( block_id_type id )const {
 }
 
 block_state_ptr controller::fetch_block_state_by_number( uint32_t block_num )const  { try {
-   auto blk_state = my->fork_db.get_block_in_current_chain_by_num( block_num );
-   return blk_state;
+   const auto& rev_blocks = my->reversible_blocks.get_index<reversible_block_index,by_num>();
+   auto objitr = rev_blocks.find(block_num);
+
+   if( objitr == rev_blocks.end() )
+      return block_state_ptr();
+
+   fc::datastream<const char*> ds( objitr->packedblock.data(), objitr->packedblock.size() );
+   block_header h;
+   fc::raw::unpack( ds, h );
+   // Only need the block id to then look up the block state in fork database, so just unpack the block_header from the stored packed data.
+   // Avoid calling objitr->get_block() since that constructs a new signed_block in heap memory and unpacks the full signed_block from the stored packed data.
+
+   return my->fork_db.get_block( h.id() );
 } FC_CAPTURE_AND_RETHROW( (block_num) ) }
 
 block_id_type controller::get_block_id_for_num( uint32_t block_num )const { try {
-   auto blk_state = my->fork_db.get_block_in_current_chain_by_num( block_num );
-   if( blk_state ) {
-      return blk_state->id;
+   const auto& rev_blocks = my->reversible_blocks.get_index<reversible_block_index,by_num>();
+   auto objitr = rev_blocks.find(block_num);
+
+   if( objitr != rev_blocks.end() ) {
+      fc::datastream<const char*> ds( objitr->packedblock.data(), objitr->packedblock.size() );
+      block_header h;
+      fc::raw::unpack( ds, h );
+      return h.id();
    }
 
    auto signed_blk = my->blog.read_block_by_num(block_num);

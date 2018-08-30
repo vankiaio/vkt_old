@@ -28,7 +28,6 @@ namespace eosio { namespace chain {
          void close();
 
          block_state_ptr  get_block(const block_id_type& id)const;
-         block_state_ptr  get_block_in_current_chain_by_num( uint32_t n )const;
 //         vector<block_state_ptr>    get_blocks_by_number(uint32_t n)const;
 
          /**

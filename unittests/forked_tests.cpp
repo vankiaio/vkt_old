@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE( irrblock ) try {
    wlog("set producer schedule to [dan,sam,pam]");
    c.produce_blocks(50);
 
-} FC_LOG_AND_RETHROW() 
+} FC_LOG_AND_RETHROW()
 
 struct fork_tracker {
    vector<signed_block_ptr> blocks;
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE( prune_remove_branch ) try {
    auto nextproducer = [](tester &c, int skip_interval) ->account_name {
       auto head_time = c.control->head_block_time();
       auto next_time = head_time + fc::milliseconds(config::block_interval_ms * skip_interval);
-      return c.control->head_block_state()->get_scheduled_producer(next_time).producer_name;   
+      return c.control->head_block_state()->get_scheduled_producer(next_time).producer_name;
    };
 
    // fork c: 2 producers: dan, sam
@@ -322,18 +322,18 @@ BOOST_AUTO_TEST_CASE( prune_remove_branch ) try {
       account_name next1 = nextproducer(c, skip1);
       if (next1 == N(dan) || next1 == N(sam)) {
          c.produce_block(fc::milliseconds(config::block_interval_ms * skip1)); skip1 = 1;
-      } 
+      }
       else ++skip1;
       account_name next2 = nextproducer(c2, skip2);
       if (next2 == N(scott)) {
          c2.produce_block(fc::milliseconds(config::block_interval_ms * skip2)); skip2 = 1;
-      } 
+      }
       else ++skip2;
    }
 
    BOOST_REQUIRE_EQUAL(87, c.control->head_block_num());
    BOOST_REQUIRE_EQUAL(73, c2.control->head_block_num());
-   
+
    // push fork from c2 => c
    int p = fork_num;
    while ( p < c2.control->head_block_num()) {
@@ -343,7 +343,7 @@ BOOST_AUTO_TEST_CASE( prune_remove_branch ) try {
 
    BOOST_REQUIRE_EQUAL(73, c.control->head_block_num());
 
-} FC_LOG_AND_RETHROW() 
+} FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_CASE(confirmation) try {
 
@@ -365,9 +365,9 @@ BOOST_AUTO_TEST_CASE(confirmation) try {
    BOOST_REQUIRE_EQUAL(61, c.control->head_block_num());
 
    // 55 is by dan
-   block_state_ptr blk = c.control->fork_db().get_block_in_current_chain_by_num(55);
-   block_state_ptr blk61 = c.control->fork_db().get_block_in_current_chain_by_num(61);
-   block_state_ptr blk50 = c.control->fork_db().get_block_in_current_chain_by_num(50);
+   block_state_ptr blk = c.control->fetch_block_state_by_number(55);
+   block_state_ptr blk61 = c.control->fetch_block_state_by_number(61);
+   block_state_ptr blk50 = c.control->fetch_block_state_by_number(50);
 
    BOOST_REQUIRE_EQUAL(0, blk->bft_irreversible_blocknum);
    BOOST_REQUIRE_EQUAL(0, blk->confirmations.size());
@@ -426,14 +426,14 @@ BOOST_AUTO_TEST_CASE(confirmation) try {
    c.control->push_confirmation(header_confirmation{blk50->id, N(pam), priv_pam.sign(blk50->sig_digest())});
    BOOST_REQUIRE_EQUAL(50, blk50->bft_irreversible_blocknum); // bft irreversible number will not propagate to lower block
 
-   block_state_ptr blk54 = c.control->fork_db().get_block_in_current_chain_by_num(54);
+   block_state_ptr blk54 = c.control->fetch_block_state_by_number(54);
    BOOST_REQUIRE_EQUAL(50, blk54->bft_irreversible_blocknum);
    BOOST_REQUIRE_EQUAL(55, blk->bft_irreversible_blocknum); // bft irreversible number will not be updated to lower value
    BOOST_REQUIRE_EQUAL(55, blk61->bft_irreversible_blocknum);
 
    c.produce_blocks(20);
 
-   block_state_ptr blk81 = c.control->fork_db().get_block_in_current_chain_by_num(81);
+   block_state_ptr blk81 = c.control->fetch_block_state_by_number(81);
    BOOST_REQUIRE_EQUAL(55, blk81->bft_irreversible_blocknum); // bft irreversible number will propagate into new blocks
 
 } FC_LOG_AND_RETHROW()

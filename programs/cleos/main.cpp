@@ -72,6 +72,7 @@ Options:
 ```
 */
 
+#include <pwd.h>
 #include <string>
 #include <vector>
 #include <regex>
@@ -148,6 +149,22 @@ FC_DECLARE_EXCEPTION( localized_exception, 10000000, "an error occured" );
     FC_MULTILINE_MACRO_END \
   )
 
+//copy pasta from keosd's main.cpp
+bfs::path determine_home_directory()
+{
+   bfs::path home;
+   struct passwd* pwd = getpwuid(getuid());
+   if(pwd) {
+      home = pwd->pw_dir;
+   }
+   else {
+      home = getenv("HOME");
+   }
+   if(home.empty())
+      home = "./";
+   return home;
+}
+
 string url = "http://127.0.0.1:8888/";
 string wallet_url = "http://127.0.0.1:8900/";
 bool no_verify = false;
@@ -163,9 +180,12 @@ bool   tx_skip_sign = false;
 bool   tx_print_json = false;
 bool   print_request = false;
 bool   print_response = false;
+bool   no_auto_keosd = false;
 
 uint8_t  tx_max_cpu_usage = 0;
 uint32_t tx_max_net_usage = 0;
+
+uint32_t delaysec = 0;
 
 vector<string> tx_permission;
 
@@ -197,6 +217,8 @@ void add_standard_transaction_options(CLI::App* cmd, string default_permission =
 
    cmd->add_option("--max-cpu-usage-ms", tx_max_cpu_usage, localized("set an upper limit on the milliseconds of cpu usage budget, for the execution of the transaction (defaults to 0 which means no limit)"));
    cmd->add_option("--max-net-usage", tx_max_net_usage, localized("set an upper limit on the net usage budget, in bytes, for the transaction (defaults to 0 which means no limit)"));
+  
+   cmd->add_option("--delay-sec", delaysec, localized("set the delay_sec seconds, defaults to 0s"));
 }
 
 vector<chain::permission_level> get_account_permissions(const vector<string>& permissions) {
@@ -297,6 +319,7 @@ fc::variant push_transaction( signed_transaction& trx, int32_t extra_kcpu = 1000
 
       trx.max_cpu_usage_ms = tx_max_cpu_usage;
       trx.max_net_usage_words = (tx_max_net_usage + 7)/8;
+      trx.delay_sec = delaysec;
    }
 
    if (!tx_skip_sign) {
@@ -766,6 +789,8 @@ void try_local_port( const string& lo_address, uint16_t port, uint32_t duration 
 }
 
 void ensure_keosd_running(CLI::App* app) {
+    if (!no_auto_keosd)
+        return;
     // get, version, net do not require keosd
     if (tx_skip_sign || app->got_subcommand("get") || app->got_subcommand("version") || app->got_subcommand("net"))
         return;
@@ -1470,14 +1495,14 @@ void get_account( const string& accountName, bool json_format ) {
       std::function<void (account_name, int)> dfs_print = [&]( account_name name, int depth ) -> void {
          auto& p = cache.at(name);
          std::cout << indent << std::string(depth*3, ' ') << name << ' ' << std::setw(5) << p.required_auth.threshold << ":    ";
+         const char *sep = "";
          for ( auto it = p.required_auth.keys.begin(); it != p.required_auth.keys.end(); ++it ) {
-            if ( it != p.required_auth.keys.begin() ) {
-               std::cout  << ", ";
-            }
-            std::cout << it->weight << ' ' << string(it->key);
+            std::cout << sep << it->weight << ' ' << string(it->key);
+            sep = ", ";
          }
          for ( auto& acc : p.required_auth.accounts ) {
-            std::cout << acc.weight << ' ' << string(acc.permission.actor) << '@' << string(acc.permission.permission) << ", ";
+            std::cout << sep << acc.weight << ' ' << string(acc.permission.actor) << '@' << string(acc.permission.permission);
+            sep = ", ";
          }
          std::cout << std::endl;
          auto it = tree.find( name );
@@ -1720,6 +1745,7 @@ int main( int argc, char** argv ) {
 
    app.add_option( "-r,--header", header_opt_callback, localized("pass specific HTTP header; repeat this option to pass multiple headers"));
    app.add_flag( "-n,--no-verify", no_verify, localized("don't verify peer certificate when using HTTPS"));
+   app.add_flag( "--no-auto-keosd", no_auto_keosd, localized("don't automatically launch a keosd if one is not currently running"));
    app.set_callback([&app]{ ensure_keosd_running(&app);});
 
    bool verbose_errors = false;

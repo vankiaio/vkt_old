@@ -23,13 +23,6 @@ namespace eosio { namespace chain {
       indexed_by<
          hashed_unique< tag<by_block_id>, member<block_header_state, block_id_type, &block_header_state::id>, std::hash<block_id_type>>,
          ordered_non_unique< tag<by_prev>, const_mem_fun<block_header_state, const block_id_type&, &block_header_state::prev> >,
-         ordered_non_unique< tag<by_block_num>,
-            composite_key< block_state,
-               member<block_header_state,uint32_t,&block_header_state::block_num>,
-               member<block_state,bool,&block_state::in_current_chain>
-            >,
-            composite_key_compare< std::less<uint32_t>, std::greater<bool> >
-         >,
          ordered_non_unique< tag<by_lib_block_num>,
             composite_key< block_header_state,
                 member<block_header_state,uint32_t,&block_header_state::dpos_irreversible_blocknum>,
@@ -44,6 +37,7 @@ namespace eosio { namespace chain {
 
    struct fork_database_impl {
       fork_multi_index_type index;
+      block_state_ptr       root; // Only uses the block_header_state portion
       block_state_ptr       head;
       fc::path              datadir;
    };
@@ -61,11 +55,21 @@ namespace eosio { namespace chain {
          fc::read_file_contents( fork_db_dat, content );
 
          fc::datastream<const char*> ds( content.data(), content.size() );
+         block_header_state bhs;
+         fc::raw::unpack( ds, bhs );
+         reset( bhs );
+
          unsigned_int size; fc::raw::unpack( ds, size );
          for( uint32_t i = 0, n = size.value; i < n; ++i ) {
             block_state s;
             fc::raw::unpack( ds, s );
-            set( std::make_shared<block_state>( move( s ) ) );
+            for( const auto& receipt : s.block->transactions ) {
+               if( receipt.trx.contains<packed_transaction>() ) {
+                  auto& pt = receipt.trx.get<packed_transaction>();
+                  s.trxs.push_back( std::make_shared<transaction_metadata>(pt) );
+               }
+            }
+            add( std::make_shared<block_state>( move( s ) ) );
          }
          block_id_type head_id;
          fc::raw::unpack( ds, head_id );
@@ -81,6 +85,7 @@ namespace eosio { namespace chain {
 
       auto fork_db_dat = my->datadir / config::forkdb_filename;
       std::ofstream out( fork_db_dat.generic_string().c_str(), std::ios::out | std::ios::binary | std::ofstream::trunc );
+      fc::raw::pack( out, *static_cast<block_header_state*>(&*my->root) );
       uint32_t num_blocks_in_fork_db = my->index.size();
       fc::raw::pack( out, unsigned_int{num_blocks_in_fork_db} );
       for( const auto& s : my->index ) {
@@ -91,16 +96,6 @@ namespace eosio { namespace chain {
       else
          fc::raw::pack( out, block_id_type() );
 
-      /// we don't normally indicate the head block as irreversible
-      /// we cannot normally prune the lib if it is the head block because
-      /// the next block needs to build off of the head block. We are exiting
-      /// now so we can prune this block as irreversible before exiting.
-      auto lib    = my->head->dpos_irreversible_blocknum;
-      auto oldest = *my->index.get<by_block_num>().begin();
-      if( oldest->block_num <= lib ) {
-         prune( oldest );
-      }
-
       my->index.clear();
    }
 
@@ -108,54 +103,65 @@ namespace eosio { namespace chain {
       close();
    }
 
-   void fork_database::set( block_state_ptr s ) {
-      auto result = my->index.insert( s );
-      EOS_ASSERT( s->id == s->header.id(), fork_database_exception,
-                  "block state id (${id}) is different from block state header id (${hid})", ("id", string(s->id))("hid", string(s->header.id())) );
-
-         //FC_ASSERT( s->block_num == s->header.block_num() );
-
-      EOS_ASSERT( result.second, fork_database_exception, "unable to insert block state, duplicate state detected" );
-      if( !my->head ) {
-         my->head =  s;
-      } else if( my->head->block_num < s->block_num ) {
-         my->head =  s;
-      }
+   void fork_database::reset( const block_header_state& root_bhs ) {
+      my->index.clear();
+      my->root = std::make_shared<block_state>( root_bhs );
+      my->head = my->root;
    }
 
-   block_state_ptr fork_database::add( block_state_ptr n ) {
-      auto inserted = my->index.insert(n);
-      EOS_ASSERT( inserted.second, fork_database_exception, "duplicate block added?" );
+   void fork_database::advance_root( const block_id_type& id ) {
+      EOS_ASSERT( my->root, fork_database_exception, "root not yet set" );
 
-      my->head = *my->index.get<by_lib_block_num>().begin();
+      auto new_root = get_block( id );
+      EOS_ASSERT( new_root, fork_database_exception, "cannot advance root to a block that does not exist in the fork database" );
 
-      auto lib    = my->head->dpos_irreversible_blocknum;
-      auto oldest = *my->index.get<by_block_num>().begin();
-
-      if( oldest->block_num < lib ) {
-         prune( oldest );
+      vector<block_id_type> blocks_to_remove;
+      for( auto b = new_root; b; ) {
+         blocks_to_remove.push_back( b->header.previous );
+         b = get_block( blocks_to_remove.back() );
+         EOS_ASSERT( b || blocks_to_remove.back() == my->root->id, fork_database_exception, "invariant violation: orphaned branch was present in forked database" );
       }
 
-      return n;
+      // The new root block should be erased from the fork database index individually rather than with the remove method,
+      // because we do not want the blocks branching off of it to be removed from the fork database.
+      my->index.erase( my->index.find( id ) );
+
+      // The other blocks to be removed are removed using the remove method so that orphaned branches do not remain in the fork database.
+      for( const auto& block_id : blocks_to_remove ) {
+         remove( block_id );
+      }
+
+      new_root->block.reset(); // This would be clearing out the block pointer in the head block state iff id == my->head->id
+      new_root->trxs.clear();
+      my->root = new_root;
    }
 
-   block_state_ptr fork_database::add( signed_block_ptr b, bool trust ) {
-      EOS_ASSERT( b, fork_database_exception, "attempt to add null block" );
-      EOS_ASSERT( my->head, fork_db_block_not_found, "no head block set" );
+   void fork_database::add( block_state_ptr n ) {
+      EOS_ASSERT( my->root, fork_database_exception, "root not yet set" );
+      EOS_ASSERT( n, fork_database_exception, "attempt to add null block state" );
 
       const auto& by_id_idx = my->index.get<by_block_id>();
-      auto existing = by_id_idx.find( b->id() );
-      EOS_ASSERT( existing == by_id_idx.end(), fork_database_exception, "we already know about this block" );
+      EOS_ASSERT( my->root->id == n->header.previous || by_id_idx.find( n->header.previous ) != by_id_idx.end(),
+                  unlinkable_block_exception, "unlinkable block", ("id", string(n->id))("previous", string(n->header.previous)) );
 
-      auto prior = by_id_idx.find( b->previous );
-      EOS_ASSERT( prior != by_id_idx.end(), unlinkable_block_exception, "unlinkable block", ("id", string(b->id()))("previous", string(b->previous)) );
+      auto inserted = my->index.insert(n);
+      EOS_ASSERT( inserted.second, fork_database_exception, "duplicate block added" );
 
-      auto result = std::make_shared<block_state>( **prior, move(b), trust );
-      EOS_ASSERT( result, fork_database_exception , "fail to add new block state" );
-      return add(result);
+      my->head = *my->index.get<by_lib_block_num>().begin();
    }
 
+   const block_state_ptr& fork_database::root()const { return my->root; }
+
    const block_state_ptr& fork_database::head()const { return my->head; }
+
+   branch_type fork_database::fetch_branch( const block_id_type& h )const {
+      branch_type result;
+      for( auto s = get_block(h); s; s = get_block( s->header.previous ) ) {
+         result.push_back( s );
+      }
+
+      return result;
+   }
 
    /**
     *  Given two head blocks, return two branches of the fork graph that
@@ -200,24 +206,31 @@ namespace eosio { namespace chain {
       return result;
    } /// fetch_branch_from
 
-   /// remove all of the invalid forks built of this id including this id
+   /// remove all of the invalid forks built off of this id including this id
    void fork_database::remove( const block_id_type& id ) {
       vector<block_id_type> remove_queue{id};
+      auto& previdx = my->index.get<by_prev>();
+      const auto head_id = my->head->id;
 
       for( uint32_t i = 0; i < remove_queue.size(); ++i ) {
-         auto itr = my->index.find( remove_queue[i] );
-         if( itr != my->index.end() )
-            my->index.erase(itr);
+         if( remove_queue[i] == head_id ) {
+            wlog( "problem!" );
+         }
+         EOS_ASSERT( remove_queue[i] != head_id, fork_database_exception,
+                     "removing the block and its descendants would remove the current head block" );
 
-         auto& previdx = my->index.get<by_prev>();
-         auto  previtr = previdx.lower_bound(remove_queue[i]);
+         auto previtr = previdx.lower_bound( remove_queue[i] );
          while( previtr != previdx.end() && (*previtr)->header.previous == remove_queue[i] ) {
             remove_queue.push_back( (*previtr)->id );
             ++previtr;
          }
       }
-      //wdump((my->index.size()));
-      my->head = *my->index.get<by_lib_block_num>().begin();
+
+      for( const auto& block_id : remove_queue ) {
+         auto itr = my->index.find( block_id );
+         if( itr != my->index.end() )
+            my->index.erase(itr);
+      }
    }
 
    void fork_database::set_validity( const block_state_ptr& h, bool valid ) {
@@ -226,45 +239,6 @@ namespace eosio { namespace chain {
       } else {
          /// remove older than irreversible and mark block as valid
          h->validated = true;
-      }
-   }
-
-   void fork_database::mark_in_current_chain( const block_state_ptr& h, bool in_current_chain ) {
-      if( h->in_current_chain == in_current_chain )
-         return;
-
-      auto& by_id_idx = my->index.get<by_block_id>();
-      auto itr = by_id_idx.find( h->id );
-      EOS_ASSERT( itr != by_id_idx.end(), fork_db_block_not_found, "could not find block in fork database" );
-
-      by_id_idx.modify( itr, [&]( auto& bsp ) { // Need to modify this way rather than directly so that Boost MultiIndex can re-sort
-         bsp->in_current_chain = in_current_chain;
-      });
-   }
-
-   void fork_database::prune( const block_state_ptr& h ) {
-      auto num = h->block_num;
-
-      auto& by_bn = my->index.get<by_block_num>();
-      auto bni = by_bn.begin();
-      while( bni != by_bn.end() && (*bni)->block_num < num ) {
-         prune( *bni );
-         bni = by_bn.begin();
-      }
-
-      auto itr = my->index.find( h->id );
-      if( itr != my->index.end() ) {
-         irreversible(*itr);
-         my->index.erase(itr);
-      }
-
-      auto& numidx = my->index.get<by_block_num>();
-      auto nitr = numidx.lower_bound( num );
-      while( nitr != numidx.end() && (*nitr)->block_num == num ) {
-         auto itr_to_remove = nitr;
-         ++nitr;
-         auto id = (*itr_to_remove)->id;
-         remove( id );
       }
    }
 

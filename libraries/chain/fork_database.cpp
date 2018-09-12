@@ -13,6 +13,7 @@ namespace eosio { namespace chain {
    using boost::multi_index_container;
    using namespace boost::multi_index;
 
+   const uint32_t fork_database::supported_version = 1;
 
    struct by_block_id;
    struct by_block_num;
@@ -51,50 +52,75 @@ namespace eosio { namespace chain {
 
       auto fork_db_dat = my->datadir / config::forkdb_filename;
       if( fc::exists( fork_db_dat ) ) {
-         string content;
-         fc::read_file_contents( fork_db_dat, content );
+         try {
+            string content;
+            fc::read_file_contents( fork_db_dat, content );
 
-         fc::datastream<const char*> ds( content.data(), content.size() );
-         block_header_state bhs;
-         fc::raw::unpack( ds, bhs );
-         reset( bhs );
+            fc::datastream<const char*> ds( content.data(), content.size() );
 
-         unsigned_int size; fc::raw::unpack( ds, size );
-         for( uint32_t i = 0, n = size.value; i < n; ++i ) {
-            block_state s;
-            fc::raw::unpack( ds, s );
-            for( const auto& receipt : s.block->transactions ) {
-               if( receipt.trx.contains<packed_transaction>() ) {
-                  auto& pt = receipt.trx.get<packed_transaction>();
-                  s.trxs.push_back( std::make_shared<transaction_metadata>(pt) );
+            uint32_t version = 0;
+            fc::raw::unpack( ds, version );
+            EOS_ASSERT( version == fork_database::supported_version, fork_database_exception,
+                       "Unsupported version of ${filename}. Fork database version is ${version} while code supports version ${supported}",
+                       ("filename", config::forkdb_filename)("version", version)("supported", fork_database::supported_version) );
+
+            block_header_state bhs;
+            fc::raw::unpack( ds, bhs );
+            reset( bhs );
+
+            unsigned_int size; fc::raw::unpack( ds, size );
+            for( uint32_t i = 0, n = size.value; i < n; ++i ) {
+               block_state s;
+               fc::raw::unpack( ds, s );
+               for( const auto& receipt : s.block->transactions ) {
+                  if( receipt.trx.contains<packed_transaction>() ) {
+                     auto& pt = receipt.trx.get<packed_transaction>();
+                     s.trxs.push_back( std::make_shared<transaction_metadata>(pt) );
+                  }
                }
+               add( std::make_shared<block_state>( move( s ) ) );
             }
-            add( std::make_shared<block_state>( move( s ) ) );
-         }
-         block_id_type head_id;
-         fc::raw::unpack( ds, head_id );
+            block_id_type head_id;
+            fc::raw::unpack( ds, head_id );
 
-         my->head = get_block( head_id );
+            if( my->root->id == head_id ) {
+               my->head = my->root;
+            } else {
+               my->head = get_block( head_id );
+               EOS_ASSERT( my->head, fork_database_exception,
+                           "could not find head while reconstructing fork database from file; ${filename} is likely corrupted",
+                           ("filename", config::forkdb_filename) );
+            }
+
+         } FC_CAPTURE_AND_RETHROW( (fork_db_dat) )
 
          fc::remove( fork_db_dat );
       }
    }
 
    void fork_database::close() {
-      if( my->index.size() == 0 ) return;
+      if( !my->root ) {
+         if( my->index.size() > 0 ) {
+            elog( "fork_database is in a bad state when closing; not writing out ${filename}", ("filename", config::forkdb_filename) );
+         }
+         return;
+      }
 
       auto fork_db_dat = my->datadir / config::forkdb_filename;
       std::ofstream out( fork_db_dat.generic_string().c_str(), std::ios::out | std::ios::binary | std::ofstream::trunc );
+      fc::raw::pack( out, fork_database::supported_version );
       fc::raw::pack( out, *static_cast<block_header_state*>(&*my->root) );
       uint32_t num_blocks_in_fork_db = my->index.size();
       fc::raw::pack( out, unsigned_int{num_blocks_in_fork_db} );
       for( const auto& s : my->index ) {
          fc::raw::pack( out, *s );
       }
-      if( my->head )
+
+      if( my->head ) {
          fc::raw::pack( out, my->head->id );
-      else
-         fc::raw::pack( out, block_id_type() );
+      } else {
+         elog( "head not set in fork database; ${filename} will be corrupted", ("filename", config::forkdb_filename) );
+      }
 
       my->index.clear();
    }

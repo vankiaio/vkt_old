@@ -134,7 +134,7 @@ struct controller_impl {
          for( const auto& t : head->trxs )
             unapplied_transactions[t->signed_id] = t;
       }
-      
+
       head = prev;
       db.undo();
    }
@@ -271,6 +271,10 @@ struct controller_impl {
       *  it would be the genesis state.
       */
       if( !head ) {
+
+         auto* bs = db.find<block_summary_object, by_id>(1);
+         EOS_ASSERT( bs == nullptr, database_exception, "existing chain state DB found despite empty fork database, replay needed" );
+
          {
             producer_schedule_type initial_schedule{ 0, {{config::system_account_name, conf.genesis.initial_key}} };
 

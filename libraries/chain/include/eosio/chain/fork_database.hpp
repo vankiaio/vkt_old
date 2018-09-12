@@ -73,6 +73,8 @@ namespace eosio { namespace chain {
           */
          void set_validity( const block_state_ptr& h, bool valid );
 
+         static const uint32_t supported_version;
+
       private:
          void set_bft_irreversible( block_id_type id );
          unique_ptr<fork_database_impl> my;
